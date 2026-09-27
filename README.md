@@ -130,7 +130,34 @@ Precificação exibida no produto:
 | Gestão | R$ 19,90 |
 | Inteligência | R$ 29,90 |
 
-O gateway ainda não faz parte deste MVP; o schema já mantém `plan` e `vehicle_limit` na organização para a futura integração de billing.
+O checkout usa o Mercado Pago em sandbox. O cadastro continua sem cartão. O plano pago só entra depois que o Mercado Pago devolve `approved`.
+
+## Simular uma compra
+
+1. No [painel de desenvolvedor do Mercado Pago](https://www.mercadopago.com.br/developers/panel/app), crie uma aplicação e copie o Access Token de **teste** (`TEST-...`).
+2. Crie um usuário comprador de teste. A conta dona da aplicação não consegue pagar a si mesma.
+3. Em Webhooks, aponte o tópico de pagamentos para `https://frota-sky.davidsgarcia1402.workers.dev/api/billing/webhook` e copie o segredo da assinatura.
+4. Grave os segredos no Worker, sem colocá-los no git:
+
+```bash
+npx wrangler secret put MP_ACCESS_TOKEN
+npx wrangler secret put MP_WEBHOOK_SECRET
+```
+
+`MP_SANDBOX=true` já está em `wrangler.jsonc`. Com isso ligado, o Worker recusa token que não comece com `TEST-`.
+
+5. Aplique a migration e publique, nesta ordem:
+
+```bash
+npm run db:migrate:remote
+npm run deploy
+```
+
+6. Entre no site como `owner`, abra **Planos e cobrança** e escolha um plano.
+7. No Checkout, entre com o comprador de teste. Cartão Mastercard `5031 4332 1540 6351`, validade `11/30`, CVV `123`, titular `APRO`.
+8. Ao voltar, o plano fica pago, a sidebar mostra **sem limite** e o terceiro veículo passa a ser aceito.
+
+Titular `OTHE` recusa e mantém o teste. Titular `CONT` deixa o pagamento pendente e também não libera o plano.
 
 ## Segurança do MVP
 

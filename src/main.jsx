@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity, AlertTriangle, Bell, Building2, Car, CheckCircle2, ClipboardCheck, CircleDollarSign,
@@ -15,10 +15,11 @@ const nav = [
   ['Relatórios', Activity], ['Usuários e permissões', ShieldCheck]
 ];
 const plans = [
-  { name: 'Essencial', value: 12.90, text: 'Controle básico para sair das planilhas.' },
-  { name: 'Gestão', value: 19.90, text: 'Operação completa, custos, OS e checklists.', featured: true },
-  { name: 'Inteligência', value: 29.90, text: 'Integrações, automações e IA sob demanda.' },
+  { id: 'essential', name: 'Essencial', value: 12.90, text: 'Controle básico para sair das planilhas.' },
+  { id: 'management', name: 'Gestão', value: 19.90, text: 'Operação completa, custos, OS e checklists.', featured: true },
+  { id: 'intelligence', name: 'Inteligência', value: 29.90, text: 'Integrações, automações e IA sob demanda.' },
 ];
+const planLabel = { trial: 'Teste', essential: 'Essencial', management: 'Gestão', intelligence: 'Inteligência' };
 const money = (v=0) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const statusLabel = (s) => ({active:'Disponível',maintenance:'Em manutenção',inactive:'Inativo'}[s] || s);
 
@@ -62,10 +63,29 @@ function App(){
   const [active,setActive] = useState('Visão geral'); const [vehicles,setVehicles] = useState([]); const [drivers,setDrivers] = useState([]);
   const [dashboard,setDashboard] = useState(null); const [alerts,setAlerts] = useState([]); const [maintenance,setMaintenance] = useState([]);
   const [query,setQuery] = useState(''); const [mobileOpen,setMobileOpen] = useState(false); const [modal,setModal] = useState(null);
-  const [busy,setBusy] = useState(false); const [toast,setToast] = useState('');
+  const [busy,setBusy] = useState(false); const [toast,setToast] = useState(''); const [billing,setBilling] = useState(null);
+  const billingReturnStarted = useRef(false);
 
   useEffect(()=>{ api.me().then(setSession).catch(()=>{}).finally(()=>setBoot(false)); },[]);
   useEffect(()=>{ if(session) refresh(); },[session]);
+  useEffect(()=>{
+    if(!session || billingReturnStarted.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if(params.get('billing') !== 'return') return;
+    billingReturnStarted.current = true;
+    const paymentId = params.get('payment_id') || params.get('collection_id');
+    const status = params.get('status') || params.get('collection_status');
+    (async()=>{
+      try {
+        if(paymentId){
+          const result = await api.confirmBilling(paymentId);
+          setSession(await api.me());
+          showToast(result.billingStatus === 'active' ? 'Pagamento aprovado. Plano liberado.' : 'Pagamento ainda não aprovado. O teste grátis continua.');
+        } else if(status === 'rejected' || status === 'failure') showToast('Pagamento recusado. O teste grátis continua.');
+      } catch(err) { showToast(err.message); }
+      finally { window.history.replaceState({}, '', window.location.pathname); }
+    })();
+  },[session]);
   async function refresh(){
     try { const [v,d,db,a,m] = await Promise.all([api.vehicles(),api.drivers(),api.dashboard(),api.alerts(),api.maintenance()]); setVehicles(v.items||[]);setDrivers(d.items||[]);setDashboard(db);setAlerts(a.items||[]);setMaintenance(m.items||[]); }
     catch(err){ if(err.status===401) setSession(null); else showToast(err.message); }
@@ -93,10 +113,17 @@ function App(){
   async function saveFuel(e){e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);try{await api.createFuel({vehicleId:f.get('vehicleId'),driverId:f.get('driverId')||null,liters:Number(f.get('liters')),totalCost:Number(f.get('totalCost')),odometerKm:Number(f.get('odometerKm')),station:f.get('station'),filledAt:new Date().toISOString()});setModal(null);await refresh();showToast('Abastecimento lançado.')}catch(err){showToast(err.message)}finally{setBusy(false)} }
   async function saveMaintenance(e){e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);try{await api.createMaintenance({vehicleId:f.get('vehicleId'),type:f.get('type'),description:f.get('description'),cost:Number(f.get('cost')||0),odometerKm:Number(f.get('odometerKm'))||null,nextDueDate:f.get('nextDueDate')||null,nextDueKm:Number(f.get('nextDueKm'))||null,status:'completed'});setModal(null);await refresh();showToast('Manutenção registrada.')}catch(err){showToast(err.message)}finally{setBusy(false)} }
   function openCreate(){ const map={'Veículos':'vehicle','Motoristas':'driver','Abastecimentos':'fuel','Manutenção':'maintenance'}; setModal(map[active]||'vehicle'); }
+  async function choosePlan(plan){
+    setBusy(true);
+    try {
+      const { url } = await api.checkout(plan);
+      window.location.assign(url);
+    } catch(err) { showToast(err.message); setBusy(false); }
+  }
 
   return <div className="app-shell">
     <aside className={`sidebar ${mobileOpen?'open':''}`}><div className="brand"><div className="brand-mark"><Truck size={23}/></div><div><strong>Frota<span>Sky</span></strong><small>Gestão inteligente</small></div></div><button className="close-mobile" onClick={()=>setMobileOpen(false)}><X/></button>
-      <div className="company-switch"><div className="avatar">{org.name?.slice(0,2).toUpperCase()}</div><div><b>{org.name}</b><span>{vehicles.length} / {org.vehicleLimit??'∞'} veículos</span></div><ChevronRight size={16}/></div>
+      <div className="company-switch"><div className="avatar">{org.name?.slice(0,2).toUpperCase()}</div><div><b>{org.name}</b><span>{vehicles.length} / {org.vehicleLimit == null ? 'sem limite' : org.vehicleLimit} veículos</span></div><ChevronRight size={16}/></div>
       <nav>{nav.map(([label,Icon])=><button key={label} className={active===label?'active':''} onClick={()=>{setActive(label);setMobileOpen(false)}}><Icon size={18}/><span>{label}</span>{label==='Manutenção'&&maintenance.length>0&&<em>{maintenance.length}</em>}</button>)}</nav>
       <div className="sidebar-bottom"><button onClick={()=>setModal('pricing')}><CircleDollarSign size={18}/> Planos e cobrança</button><button><Settings size={18}/> Configurações</button><button onClick={logout} disabled={loggingOut}><LogOut size={18}/> {loggingOut?'Saindo...':'Sair'}</button></div>
     </aside>
@@ -109,7 +136,7 @@ function App(){
             <section className="ai-banner"><div className="ai-icon"><Sparkles/></div><div><span>FROTA SKY IA — ROADMAP</span><h3>Base pronta para análises sob demanda.</h3><p>Os dados de consumo, quilometragem e manutenção já estão estruturados para alimentar detecção de anomalias sem manter IA rodando continuamente.</p></div></section></div>
         </>:<Module active={active} vehicles={filtered} drivers={drivers} maintenance={maintenance} alerts={alerts}/>} 
       </section></main>
-    {modal && <Modal type={modal} close={()=>setModal(null)} busy={busy} vehicles={vehicles} drivers={drivers} onVehicle={saveVehicle} onDriver={saveDriver} onFuel={saveFuel} onMaintenance={saveMaintenance}/>} {toast&&<div className="toast">{toast}</div>}
+    {modal && <Modal type={modal} close={()=>setModal(null)} busy={busy} vehicles={vehicles} drivers={drivers} organization={org} billing={billing} onCheckout={choosePlan} onVehicle={saveVehicle} onDriver={saveDriver} onFuel={saveFuel} onMaintenance={saveMaintenance}/>} {toast&&<div className="toast">{toast}</div>}
   </div>
 }
 
@@ -122,7 +149,7 @@ if(active==='Motoristas')return <section className="panel"><div className="panel
 if(active==='Manutenção')return <section className="panel"><div className="panel-head"><div><h2>Manutenção</h2><p>Preventiva e corretiva</p></div></div><div className="maintenance-list">{maintenance.map(m=><div className="maint" key={m.id}><div className={`maint-icon ${m.type==='preventive'?'preventive':'corrective'}`}><Wrench/></div><div><b>{m.description}</b><span>{m.plate} • {m.performed_at?.slice(0,10)}</span></div><div><b>{money(m.cost)}</b><span>{m.status}</span></div></div>)}{!maintenance.length&&<Empty text="Nenhum histórico de manutenção."/>}</div></section>;
 const info={Abastecimentos:'Backend pronto para lançamentos de combustível, odômetro e custo por litro.',Checklists:'Endpoint de inspeções + upload R2 disponível no MVP.',Documentos:'Backend de documentos e vencimentos preparado para veículo e motorista.',Fornecedores:'Cadastro de fornecedores disponível na API.',Relatórios:'Dashboard já consolida custo mensal; relatórios avançados entram na próxima etapa.','Usuários e permissões':'RBAC ativo no backend: owner, admin, manager, driver e viewer.'}[active]||'Módulo preparado.';return <section className="panel module-hero"><div><span className="eyebrow">MÓDULO MVP</span><h2>{active}</h2><p>{info}</p></div><div className="ready-badge"><CheckCircle2/> Backend preparado</div></section>}
 
-function Modal({type,close,busy,vehicles,drivers,onVehicle,onDriver,onFuel,onMaintenance}){if(type==='pricing')return <div className="modal-backdrop"><div className="pricing-modal"><button className="modal-close" onClick={close}><X/></button><div className="pricing-head"><span className="eyebrow">PREÇO POR VEÍCULO GERENCIADO</span><h2>Comece grátis. Pague quando sua operação crescer.</h2><p>O trial inclui até 2 veículos. Depois, escolha o nível de gestão que faz sentido para a empresa.</p></div><div className="plans">{plans.map(p=><div className={`plan ${p.featured?'featured':''}`} key={p.name}>{p.featured&&<span className="badge">RECOMENDADO</span>}<h3>{p.name}</h3><p>{p.text}</p><div className="price"><small>R$</small><strong>{p.value.toFixed(2).replace('.',',')}</strong><span>/ veículo / mês</span></div><button className={p.featured?'primary':'ghost'}>Escolher {p.name}</button></div>)}</div></div></div>;
+function Modal({type,close,busy,vehicles,drivers,organization,billing,onCheckout,onVehicle,onDriver,onFuel,onMaintenance}){if(type==='pricing'){ const current = billing?.plan || organization?.plan || 'trial'; const status = billing?.billingStatus || organization?.billingStatus || 'trial'; return <div className="modal-backdrop"><div className="pricing-modal"><button className="modal-close" onClick={close}><X/></button><div className="pricing-head"><span className="eyebrow">PREÇO POR VEÍCULO GERENCIADO</span><h2>Comece grátis. Pague quando sua operação crescer.</h2><p>O teste inclui até 2 veículos. Plano atual: {planLabel[current] || current}.{status==='pending'?' Pagamento em análise. O teste continua até a aprovação.':''}</p></div><div className="plans">{plans.map(p=><div className={`plan ${p.featured?'featured':''}`} key={p.id}>{(current===p.id&&status==='active')?<span className="badge">PLANO ATUAL</span>:p.featured&&<span className="badge">RECOMENDADO</span>}<h3>{p.name}</h3><p>{p.text}</p><div className="price"><small>R$</small><strong>{p.value.toFixed(2).replace('.',',')}</strong><span>/ veículo / mês</span></div><button className={p.featured?'primary':'ghost'} disabled={busy} onClick={()=>onCheckout(p.id)}>{busy?'Abrindo checkout...':`Escolher ${p.name}`}</button></div>)}</div></div></div>;}
 let body=null;if(type==='vehicle')body=<form onSubmit={onVehicle}><label>Placa<input name="plate" required placeholder="ABC1D23"/></label><div className="form-row"><label>Marca<input name="make" placeholder="Mercedes-Benz"/></label><label>Modelo<input name="model" required placeholder="Sprinter 417"/></label></div><div className="form-row"><label>Ano<input name="year" type="number" min="1980" max="2100"/></label><label>Tipo<select name="type"><option value="van">Van</option><option value="truck">Caminhão</option><option value="utility">Utilitário</option><option value="pickup">Picape</option><option value="car">Carro</option><option value="other">Outro</option></select></label></div><label>Odômetro atual<input name="odometerKm" type="number" min="0"/></label><label>Motorista principal<select name="primaryDriverId"><option value="">Não atribuir</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><Submit busy={busy} text="Cadastrar veículo"/></form>;
 if(type==='driver')body=<form onSubmit={onDriver}><label>Nome<input name="name" required/></label><label>Telefone<input name="phone"/></label><div className="form-row"><label>CNH<input name="cnhNumber"/></label><label>Categoria<input name="cnhCategory" placeholder="B, C, D..."/></label></div><label>Vencimento CNH<input name="cnhExpiresAt" type="date"/></label><Submit busy={busy} text="Cadastrar motorista"/></form>;
 if(type==='fuel')body=<form onSubmit={onFuel}><label>Veículo<select name="vehicleId" required><option value="">Selecione</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make} {v.model}</option>)}</select></label><label>Motorista<select name="driverId"><option value="">Não informado</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><div className="form-row"><label>Litros<input name="liters" type="number" step="0.01" min="0.01" required/></label><label>Valor total<input name="totalCost" type="number" step="0.01" min="0" required/></label></div><label>Odômetro<input name="odometerKm" type="number" min="0" required/></label><label>Posto<input name="station"/></label><Submit busy={busy} text="Lançar abastecimento"/></form>;

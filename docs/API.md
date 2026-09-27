@@ -7,7 +7,20 @@ Todas as rotas usam o mesmo domínio do frontend e prefixo `/api`. Sessões são
 - `POST /api/auth/register` — cria usuário owner + organização trial (2 veículos) + sessão.
 - `POST /api/auth/login` — autentica e cria sessão.
 - `POST /api/auth/logout` — invalida a sessão atual.
-- `GET /api/auth/me` — retorna usuário e organização atual.
+- `GET /api/auth/me` — retorna usuário e organização atual, inclusive `plan`, `vehicleLimit` e `billingStatus`.
+
+Quem chama checkout e confirmação precisa estar autenticado com papel `owner`. O webhook é público e só aceita a assinatura do Mercado Pago.
+
+## Cobrança
+
+- `GET /api/billing` — plano, status (`trial`, `pending`, `active`, `cancelled`), quantidade e valor.
+- `POST /api/billing/checkout` — body `{ "plan": "essential" | "management" | "intelligence" }`. Cria a preferência do Checkout Pro e devolve `{ url, quantity, amount }`. No sandbox, `url` é o `sandbox_init_point`.
+- `POST /api/billing/confirm` — body `{ "paymentId": "123" }`. Consulta o pagamento no Mercado Pago e só libera o plano se `status` for `approved`, a organização for a da sessão e o valor bater com quantidade × preço.
+- `POST /api/billing/webhook` — notificação de pagamento. Valida `x-signature` com `MP_WEBHOOK_SECRET` e aplica a mesma regra.
+
+Preço por veículo/mês: Essencial R$ 12,90, Gestão R$ 19,90, Inteligência R$ 29,90. A quantidade é o número de veículos ativos, com mínimo 1. Pagamento aprovado grava o plano e remove o teto de 2 veículos. Pagamento pendente ou recusado mantém o teste.
+
+Segredos do Worker, fora do git: `MP_ACCESS_TOKEN` (token `TEST-` enquanto `MP_SANDBOX=true`) e `MP_WEBHOOK_SECRET`. A URL do webhook em produção é `https://frota-sky.davidsgarcia1402.workers.dev/api/billing/webhook`.
 
 ## Dashboard
 

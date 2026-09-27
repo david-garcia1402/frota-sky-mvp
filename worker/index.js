@@ -1,6 +1,7 @@
 import { assert, clearSessionCookie, error, HttpError, json, readJson, sessionCookie } from './lib/http.js';
 import { hashPassword, randomToken, sha256, verifyPassword } from './lib/crypto.js';
 import { requireAuth, requireRole } from './lib/auth.js';
+import { confirmPayment, createCheckout, getBilling, handleWebhook, syncBillingQuantity } from './lib/billing.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PLATE_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
@@ -65,7 +66,7 @@ async function register(request, env) {
     VALUES (?, ?, ?, ?, datetime('now', '+30 days'))`)
     .bind(id('ses'), userId, orgId, tokenHash).run();
 
-  return json({ user: { id: userId, name, email }, organization: { id: orgId, name: organizationName, plan: 'trial', vehicleLimit: 2 } }, 201, {
+  return json({ user: { id: userId, name, email, role: 'owner' }, organization: { id: orgId, name: organizationName, plan: 'trial', vehicleLimit: 2, billingStatus: 'trial' } }, 201, {
     'set-cookie': sessionCookie(token),
   });
 }
@@ -76,7 +77,7 @@ async function login(request, env) {
   const password = String(body.password || '');
   const user = await env.DB.prepare('SELECT id, name, email, password_hash, status FROM users WHERE email = ? LIMIT 1').bind(email).first();
   assert(user && user.status === 'active' && await verifyPassword(password, user.password_hash), 401, 'INVALID_CREDENTIALS', 'E-mail ou senha inválidos.');
-  const membership = await env.DB.prepare(`SELECT om.organization_id, om.role, o.name AS organization_name, o.plan, o.vehicle_limit
+  const membership = await env.DB.prepare(`SELECT om.organization_id, om.role, o.name AS organization_name, o.plan, o.vehicle_limit, o.billing_status
     FROM organization_members om JOIN organizations o ON o.id = om.organization_id
     WHERE om.user_id = ? ORDER BY om.created_at ASC LIMIT 1`).bind(user.id).first();
   assert(membership, 403, 'NO_ORGANIZATION', 'Usuário sem organização vinculada.');
@@ -89,7 +90,7 @@ async function login(request, env) {
 
   return json({
     user: { id: user.id, name: user.name, email: user.email, role: membership.role },
-    organization: { id: membership.organization_id, name: membership.organization_name, plan: membership.plan, vehicleLimit: membership.vehicle_limit },
+    organization: { id: membership.organization_id, name: membership.organization_name, plan: membership.plan, vehicleLimit: membership.vehicle_limit, billingStatus: membership.billing_status || 'trial' },
   }, 200, { 'set-cookie': sessionCookie(token) });
 }
 
@@ -101,10 +102,10 @@ async function logout(request, env) {
 
 async function me(request, env) {
   const auth = await requireAuth(request, env);
-  const org = await env.DB.prepare('SELECT id, name, plan, vehicle_limit FROM organizations WHERE id = ?').bind(auth.organization_id).first();
+  const org = await env.DB.prepare('SELECT id, name, plan, vehicle_limit, billing_status FROM organizations WHERE id = ?').bind(auth.organization_id).first();
   return json({
     user: { id: auth.user_id, name: auth.name, email: auth.email, role: auth.role },
-    organization: { id: org.id, name: org.name, plan: org.plan, vehicleLimit: org.vehicle_limit },
+    organization: { id: org.id, name: org.name, plan: org.plan, vehicleLimit: org.vehicle_limit, billingStatus: org.billing_status || 'trial' },
   });
 }
 
@@ -163,6 +164,7 @@ async function createVehicle(request, env) {
     throw e;
   }
   await audit(env, auth, 'vehicle.created', 'vehicle', vehicleId, { plate });
+  await syncBillingQuantity(env, auth.organization_id);
   return json({ id: vehicleId }, 201);
 }
 
@@ -191,6 +193,7 @@ async function deleteVehicle(request, env, vehicleId) {
     WHERE id=? AND organization_id=? AND deleted_at IS NULL`).bind(vehicleId, auth.organization_id).run();
   assert(result.meta.changes > 0, 404, 'NOT_FOUND', 'Veículo não encontrado.');
   await audit(env, auth, 'vehicle.deleted', 'vehicle', vehicleId);
+  await syncBillingQuantity(env, auth.organization_id);
   return json({ ok: true });
 }
 
@@ -420,6 +423,10 @@ async function api(request, env) {
   if (path === '/api/auth/login' && method === 'POST') return login(request, env);
   if (path === '/api/auth/logout' && method === 'POST') return logout(request, env);
   if (path === '/api/auth/me' && method === 'GET') return me(request, env);
+  if (path === '/api/billing' && method === 'GET') return getBilling(request, env);
+  if (path === '/api/billing/checkout' && method === 'POST') return createCheckout(request, env);
+  if (path === '/api/billing/confirm' && method === 'POST') return confirmPayment(request, env);
+  if (path === '/api/billing/webhook' && method === 'POST') return handleWebhook(request, env);
   if (path === '/api/dashboard' && method === 'GET') return dashboard(request, env);
   if (path === '/api/vehicles' && method === 'GET') return listVehicles(request, env);
   if (path === '/api/vehicles' && method === 'POST') return createVehicle(request, env);
