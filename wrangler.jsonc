@@ -1,32 +1,42 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "frota-sky",
-  "main": "worker/index.js",
-  "compatibility_date": "2026-09-26",
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "frota-sky-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "FILES",
-      "bucket_name": "frota-sky-files"
-    }
-  ],
-  "triggers": {
-    "crons": ["0 10 * * *"]
-  },
-  "observability": {
-    "enabled": true
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "frota-sky",
+	"main": "worker/index.js",
+	"compatibility_date": "2026-09-26",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "frota-sky-db",
+			"database_id": "734b644d-d7f3-4891-b440-9dc5fdc997fc",
+			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "frota_sky_db",
+			"database_name": "frota-sky-db",
+			"database_id": "734b644d-d7f3-4891-b440-9dc5fdc997fc",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "FILES",
+			"bucket_name": "frota-sky-files"
+		}
+	],
+	"triggers": {
+		"crons": [
+			"0 10 * * *"
+		]
+	},
+	"observability": {
+		"enabled": true
+	}
 }
