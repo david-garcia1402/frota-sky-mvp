@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from './api.js';
 import './styles.css';
+import UserMenu from './UserMenu.jsx';
 
 const nav = [
   ['Visão geral', LayoutDashboard], ['Veículos', Car], ['Motoristas', Users], ['Abastecimentos', Fuel],
@@ -22,8 +23,8 @@ const planLabel = { trial: 'Teste', essential: 'Essencial', management: 'Gestão
 const money = (v=0) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const statusLabel = (s) => ({active:'Disponível',maintenance:'Em manutenção',inactive:'Inativo'}[s] || s);
 
-function Auth({ onAuthenticated }) {
-  const [mode, setMode] = useState('register');
+function Auth({ onAuthenticated, initialMode = 'register' }) {
+  const [mode, setMode] = useState(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   async function submit(e) {
@@ -56,6 +57,8 @@ function Auth({ onAuthenticated }) {
 }
 
 function App(){
+  const [loggingOut,setLoggingOut] = useState(false);
+  const [authMode,setAuthMode] = useState('register');
   const [session,setSession] = useState(null); const [boot,setBoot] = useState(true);
   const [active,setActive] = useState('Visão geral'); const [vehicles,setVehicles] = useState([]); const [drivers,setDrivers] = useState([]);
   const [dashboard,setDashboard] = useState(null); const [alerts,setAlerts] = useState([]); const [maintenance,setMaintenance] = useState([]);
@@ -88,10 +91,21 @@ function App(){
     catch(err){ if(err.status===401) setSession(null); else showToast(err.message); }
   }
   function showToast(msg){ setToast(msg); setTimeout(()=>setToast(''),3200); }
-  async function logout(){ await api.logout().catch(()=>{});setSession(null); }
+  async function logout(){
+    if(loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await api.logout();
+      setAuthMode('login');setSession(null);setModal(null);setMobileOpen(false);
+      setActive('Visão geral');setQuery('');setVehicles([]);setDrivers([]);
+      setDashboard(null);setAlerts([]);setMaintenance([]);setToast('');
+    } catch(err) {
+      showToast('Não foi possível sair da conta. Tente novamente.');
+    } finally { setLoggingOut(false); }
+  }
   const filtered = useMemo(()=>vehicles.filter(v=>`${v.plate} ${v.make} ${v.model} ${v.driver_name||''}`.toLowerCase().includes(query.toLowerCase())),[vehicles,query]);
   if(boot) return <div className="boot"><Truck/><LoaderCircle className="spin"/></div>;
-  if(!session) return <Auth onAuthenticated={setSession}/>;
+  if(!session) return <Auth onAuthenticated={setSession} initialMode={authMode}/>;
   const org=session.organization||{}; const user=session.user||{}; const fleet=dashboard?.fleet||{}; const costs=dashboard?.costs||{};
 
   async function saveVehicle(e){ e.preventDefault();setBusy(true); const f=new FormData(e.currentTarget); try{ await api.createVehicle({plate:f.get('plate'),make:f.get('make'),model:f.get('model'),year:Number(f.get('year'))||null,type:f.get('type'),odometerKm:Number(f.get('odometerKm'))||0,primaryDriverId:f.get('primaryDriverId')||null});setModal(null);await refresh();showToast('Veículo cadastrado.'); }catch(err){showToast(err.message)}finally{setBusy(false)} }
@@ -111,9 +125,9 @@ function App(){
     <aside className={`sidebar ${mobileOpen?'open':''}`}><div className="brand"><div className="brand-mark"><Truck size={23}/></div><div><strong>Frota<span>Sky</span></strong><small>Gestão inteligente</small></div></div><button className="close-mobile" onClick={()=>setMobileOpen(false)}><X/></button>
       <div className="company-switch"><div className="avatar">{org.name?.slice(0,2).toUpperCase()}</div><div><b>{org.name}</b><span>{vehicles.length} / {org.vehicleLimit == null ? 'sem limite' : org.vehicleLimit} veículos</span></div><ChevronRight size={16}/></div>
       <nav>{nav.map(([label,Icon])=><button key={label} className={active===label?'active':''} onClick={()=>{setActive(label);setMobileOpen(false)}}><Icon size={18}/><span>{label}</span>{label==='Manutenção'&&maintenance.length>0&&<em>{maintenance.length}</em>}</button>)}</nav>
-      <div className="sidebar-bottom"><button onClick={()=>{ setModal('pricing'); api.billing().then(setBilling).catch(err=>showToast(err.message)); }}><CircleDollarSign size={18}/> Planos e cobrança</button><button><Settings size={18}/> Configurações</button><button onClick={logout}><LogOut size={18}/> Sair</button></div>
+      <div className="sidebar-bottom"><button onClick={()=>setModal('pricing')}><CircleDollarSign size={18}/> Planos e cobrança</button><button><Settings size={18}/> Configurações</button><button onClick={logout} disabled={loggingOut}><LogOut size={18}/> {loggingOut?'Saindo...':'Sair'}</button></div>
     </aside>
-    <main><header className="topbar"><button className="menu-btn" onClick={()=>setMobileOpen(true)}><Menu/></button><div className="top-search"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar veículo, placa, motorista..."/></div><div className="top-actions"><button className="icon-btn" onClick={()=>setActive('Visão geral')}><Bell size={19}/>{alerts.some(a=>!a.is_read)&&<i/>}</button><button className="user"><div className="avatar">{user.name?.slice(0,2).toUpperCase()}</div><span><b>{user.name}</b><small>{user.role}</small></span></button></div></header>
+    <main><header className="topbar"><button className="menu-btn" onClick={()=>setMobileOpen(true)}><Menu/></button><div className="top-search"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar veículo, placa, motorista..."/></div><div className="top-actions"><button className="icon-btn" onClick={()=>setActive('Visão geral')}><Bell size={19}/>{alerts.some(a=>!a.is_read)&&<i/>}</button><UserMenu user={user} organization={org} onLogout={logout} loggingOut={loggingOut}/></div></header>
       <section className="content"><div className="page-head"><div><p>OPERAÇÃO EM TEMPO REAL</p><h1>{active}</h1><span>Controle operacional, financeiro e preventivo da sua frota em um só lugar.</span></div><div className="page-actions"><button className="ghost" onClick={refresh}><RefreshCw size={17}/> Atualizar</button><button className="primary" onClick={openCreate}><Plus size={17}/> Novo registro</button></div></div>
         {active==='Visão geral'?<>
           <div className="stats-grid"><Stat icon={Truck} label="Frota monitorada" value={`${Number(fleet.total||0)} veículos`} helper={`${Number(fleet.active||0)} disponíveis`} /><Stat icon={CircleDollarSign} label="Custo no mês" value={money(costs.total)} helper={`${money(costs.fuel)} em combustível`} tone="green"/><Stat icon={Wrench} label="Em manutenção" value={String(Number(fleet.maintenance||0))} helper="Veículos indisponíveis" tone="purple"/><Stat icon={AlertTriangle} label="Alertas" value={String(alerts.filter(a=>!a.is_read).length)} helper="Pendências operacionais" tone="orange"/></div>
