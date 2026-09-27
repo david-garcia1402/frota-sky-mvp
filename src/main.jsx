@@ -38,7 +38,7 @@ function Auth({ onAuthenticated, initialMode = 'register' }) {
   }
   return <div className="auth-page">
     <section className="auth-brand">
-      <div className="brand auth-logo"><div className="brand-mark"><Truck size={24}/></div><div><strong>Frota<span>Sky</span></strong><small>Gestão inteligente de frotas</small></div></div>
+      <div className="brand auth-logo"><img className="brand-logo brand-logo-auth" src="/brand/frota-sky-logo-dark.svg" alt="FrotaSky — Gestão inteligente de frotas"/></div>
       <div className="auth-copy"><span className="eyebrow">CONTROLE OPERACIONAL DE VERDADE</span><h1>Sua frota custa dinheiro todos os dias. Veja exatamente onde.</h1><p>Veículos, motoristas, documentos, combustível, manutenção, checklists e custos por veículo em um único painel.</p>
       <div className="auth-benefits"><b><CheckCircle2/> Comece com até 2 veículos grátis</b><b><CheckCircle2/> Sem cartão no cadastro</b><b><CheckCircle2/> Dados separados por empresa</b></div></div>
     </section>
@@ -95,7 +95,7 @@ function App(){
   function openCreate(){ const map={'Veículos':'vehicle','Motoristas':'driver','Abastecimentos':'fuel','Manutenção':'maintenance'}; setModal(map[active]||'vehicle'); }
 
   return <div className="app-shell">
-    <aside className={`sidebar ${mobileOpen?'open':''}`}><div className="brand"><div className="brand-mark"><Truck size={23}/></div><div><strong>Frota<span>Sky</span></strong><small>Gestão inteligente</small></div></div><button className="close-mobile" onClick={()=>setMobileOpen(false)}><X/></button>
+    <aside className={`sidebar ${mobileOpen?'open':''}`}><div className="brand"><img className="brand-logo brand-logo-sidebar" src="/brand/frota-sky-logo-dark.svg" alt="FrotaSky"/></div><button className="close-mobile" onClick={()=>setMobileOpen(false)}><X/></button>
       <div className="company-switch"><div className="avatar">{org.name?.slice(0,2).toUpperCase()}</div><div><b>{org.name}</b><span>{vehicles.length} / {org.vehicleLimit??'∞'} veículos</span></div><ChevronRight size={16}/></div>
       <nav>{nav.map(([label,Icon])=><button key={label} className={active===label?'active':''} onClick={()=>{setActive(label);setMobileOpen(false)}}><Icon size={18}/><span>{label}</span>{label==='Manutenção'&&maintenance.length>0&&<em>{maintenance.length}</em>}</button>)}</nav>
       <div className="sidebar-bottom"><button onClick={()=>setModal('pricing')}><CircleDollarSign size={18}/> Planos e cobrança</button><button><Settings size={18}/> Configurações</button><button onClick={logout} disabled={loggingOut}><LogOut size={18}/> {loggingOut?'Saindo...':'Sair'}</button></div>
