@@ -38,5 +38,9 @@
 	},
 	"observability": {
 		"enabled": true
+	},
+	"vars": {
+		"MP_SANDBOX": "true",
+		"APP_ORIGIN": "https://frota-sky.davidsgarcia1402.workers.dev"
 	}
 }
