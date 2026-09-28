@@ -11,7 +11,8 @@
     "db:migrate:local": "wrangler d1 migrations apply frota-sky-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply frota-sky-db --remote",
     "deploy": "npm run build && wrangler deploy",
-    "check": "node --check worker/index.js && npm run build"
+    "check": "node --check worker/index.js && npm run build",
+    "test": "node --test tests/kiwify.test.js"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
