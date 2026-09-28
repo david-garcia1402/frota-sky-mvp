@@ -64,6 +64,16 @@ Todas as rotas usam o mesmo domínio do frontend e prefixo `/api`. Sessões são
 
 O Cron diário gera alertas de CNH e manutenção por KM e remove sessões expiradas.
 
+## Cobrança (Kiwify)
+
+- `POST /api/webhooks/kiwify` — recebe eventos da Kiwify. Exige `KIWIFY_WEBHOOK_TOKEN` na query `token` ou uma assinatura HMAC-SHA1 do corpo cru no header `signature` / `x-kiwify-signature`.
+
+Eventos que ativam o plano (`essential`, `management`, `intelligence`) e removem o limite de veículos: `order_approved`, `compra_aprovada`, `subscription_renewed`, `subscription_reactivated`.
+
+Eventos que devolvem o teste de 2 veículos: `order_refunded`, `compra_reembolsada`, `chargeback`, `subscription_canceled`.
+
+A empresa é localizada por `TrackingParameters.src` (id da organização) e, se não houver, pelo e-mail do cliente entre os owners/admins. O plano vem do nome do produto (Essencial, Gestão, Inteligência) ou das variáveis `KIWIFY_PRODUCT_*`.
+
 ## Perfis
 
 - `owner`: controle total do tenant.

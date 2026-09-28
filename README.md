@@ -31,7 +31,8 @@ Esta versão já deixou de usar `localStorage` como fonte principal e possui bac
 - alertas automáticos;
 - auditoria;
 - trial de 2 veículos;
-- CTAs e precificação por veículo.
+- planos Essencial, Gestão e Inteligência com checkout da Kiwify;
+- webhook que ativa o plano depois do pagamento.
 
 ## 1. Instalação
 
@@ -120,17 +121,34 @@ frota-sky/
 
 ## Regra comercial atual
 
-O cadastro cria o plano `trial`, com limite de 2 veículos.
+O cadastro cria o plano `trial`, com limite de 2 veículos. Os planos pagos removem esse limite depois que a Kiwify confirma o pagamento.
 
-Precificação exibida no produto:
+| Plano | Valor por veículo/mês | Checkout |
+| --- | ---: | --- |
+| Essencial | R$ 12,90 | https://pay.kiwify.com.br/9DUQjYR |
+| Gestão | R$ 19,90 | https://pay.kiwify.com.br/vUnXhqQ |
+| Inteligência | R$ 29,90 | https://pay.kiwify.com.br/Hrk6kF9 |
 
-| Plano | Valor por veículo/mês |
-| --- | ---: |
-| Essencial | R$ 12,90 |
-| Gestão | R$ 19,90 |
-| Inteligência | R$ 29,90 |
+A página de vendas é https://kiwify.app/lsdA7La. No painel, **Escolher** abre o checkout já com e-mail, nome e o id da empresa (`src` e `sck`).
 
-O gateway ainda não faz parte deste MVP; o schema já mantém `plan` e `vehicle_limit` na organização para a futura integração de billing.
+### Webhook da Kiwify
+
+1. Aplique a migration `0002_billing.sql` no D1 (`npm run db:migrate:remote`).
+2. Grave o token:
+
+```bash
+npx wrangler secret put KIWIFY_WEBHOOK_TOKEN
+```
+
+3. No painel da Kiwify, aponte o webhook para:
+
+```text
+https://frota-sky.davidsgarcia1402.workers.dev/api/webhooks/kiwify?token=SEU_TOKEN
+```
+
+Compra aprovada e renovação ativam o plano. Reembolso, chargeback e cancelamento da mesma assinatura devolvem a empresa ao teste de 2 veículos. Os veículos já cadastrados permanecem.
+
+Se os produtos tiverem outro nome, defina `KIWIFY_PRODUCT_ESSENTIAL`, `KIWIFY_PRODUCT_MANAGEMENT` e `KIWIFY_PRODUCT_INTELLIGENCE` com o `product_id` enviado no webhook.
 
 ## Segurança do MVP
 

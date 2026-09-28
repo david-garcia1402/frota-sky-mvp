@@ -1,6 +1,7 @@
 import { assert, clearSessionCookie, error, HttpError, json, readJson, sessionCookie } from './lib/http.js';
 import { hashPassword, randomToken, sha256, verifyPassword } from './lib/crypto.js';
 import { requireAuth, requireRole } from './lib/auth.js';
+import { applyKiwifyWebhook, isKiwifyAuthorized } from './lib/kiwify.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PLATE_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
@@ -65,9 +66,37 @@ async function register(request, env) {
     VALUES (?, ?, ?, ?, datetime('now', '+30 days'))`)
     .bind(id('ses'), userId, orgId, tokenHash).run();
 
-  return json({ user: { id: userId, name, email }, organization: { id: orgId, name: organizationName, plan: 'trial', vehicleLimit: 2 } }, 201, {
+  return json({ user: { id: userId, name, email, role: 'owner' }, organization: { id: orgId, name: organizationName, plan: 'trial', vehicleLimit: 2, billingStatus: null } }, 201, {
     'set-cookie': sessionCookie(token),
   });
+}
+
+function withBilling(row) {
+  if (row && row.billing_status === undefined) row.billing_status = null;
+  return row;
+}
+
+async function membershipForUser(env, userId) {
+  const withBillingSql = `SELECT om.organization_id, om.role, o.name AS organization_name, o.plan, o.vehicle_limit, o.billing_status
+    FROM organization_members om JOIN organizations o ON o.id = om.organization_id
+    WHERE om.user_id = ? ORDER BY om.created_at ASC LIMIT 1`;
+  try {
+    return withBilling(await env.DB.prepare(withBillingSql).bind(userId).first());
+  } catch (cause) {
+    if (!String(cause?.message || cause).includes('no such column')) throw cause;
+    return withBilling(await env.DB.prepare(`SELECT om.organization_id, om.role, o.name AS organization_name, o.plan, o.vehicle_limit
+      FROM organization_members om JOIN organizations o ON o.id = om.organization_id
+      WHERE om.user_id = ? ORDER BY om.created_at ASC LIMIT 1`).bind(userId).first());
+  }
+}
+
+async function organizationById(env, organizationId) {
+  try {
+    return withBilling(await env.DB.prepare('SELECT id, name, plan, vehicle_limit, billing_status FROM organizations WHERE id = ?').bind(organizationId).first());
+  } catch (cause) {
+    if (!String(cause?.message || cause).includes('no such column')) throw cause;
+    return withBilling(await env.DB.prepare('SELECT id, name, plan, vehicle_limit FROM organizations WHERE id = ?').bind(organizationId).first());
+  }
 }
 
 async function login(request, env) {
@@ -76,9 +105,7 @@ async function login(request, env) {
   const password = String(body.password || '');
   const user = await env.DB.prepare('SELECT id, name, email, password_hash, status FROM users WHERE email = ? LIMIT 1').bind(email).first();
   assert(user && user.status === 'active' && await verifyPassword(password, user.password_hash), 401, 'INVALID_CREDENTIALS', 'E-mail ou senha inválidos.');
-  const membership = await env.DB.prepare(`SELECT om.organization_id, om.role, o.name AS organization_name, o.plan, o.vehicle_limit
-    FROM organization_members om JOIN organizations o ON o.id = om.organization_id
-    WHERE om.user_id = ? ORDER BY om.created_at ASC LIMIT 1`).bind(user.id).first();
+  const membership = await membershipForUser(env, user.id);
   assert(membership, 403, 'NO_ORGANIZATION', 'Usuário sem organização vinculada.');
 
   const token = randomToken();
@@ -89,7 +116,7 @@ async function login(request, env) {
 
   return json({
     user: { id: user.id, name: user.name, email: user.email, role: membership.role },
-    organization: { id: membership.organization_id, name: membership.organization_name, plan: membership.plan, vehicleLimit: membership.vehicle_limit },
+    organization: { id: membership.organization_id, name: membership.organization_name, plan: membership.plan, vehicleLimit: membership.vehicle_limit, billingStatus: membership.billing_status || null },
   }, 200, { 'set-cookie': sessionCookie(token) });
 }
 
@@ -101,10 +128,10 @@ async function logout(request, env) {
 
 async function me(request, env) {
   const auth = await requireAuth(request, env);
-  const org = await env.DB.prepare('SELECT id, name, plan, vehicle_limit FROM organizations WHERE id = ?').bind(auth.organization_id).first();
+  const org = await organizationById(env, auth.organization_id);
   return json({
     user: { id: auth.user_id, name: auth.name, email: auth.email, role: auth.role },
-    organization: { id: org.id, name: org.name, plan: org.plan, vehicleLimit: org.vehicle_limit },
+    organization: { id: org.id, name: org.name, plan: org.plan, vehicleLimit: org.vehicle_limit, billingStatus: org.billing_status || null },
   });
 }
 
@@ -149,7 +176,7 @@ async function createVehicle(request, env) {
 
   const org = await env.DB.prepare('SELECT plan, vehicle_limit FROM organizations WHERE id = ?').bind(auth.organization_id).first();
   const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM vehicles WHERE organization_id = ? AND deleted_at IS NULL').bind(auth.organization_id).first();
-  assert(org.vehicle_limit === null || count.total < org.vehicle_limit, 402, 'VEHICLE_LIMIT', 'Limite de veículos do plano atingido.');
+  assert(org.vehicle_limit === null || count.total < org.vehicle_limit, 402, 'VEHICLE_LIMIT', 'Limite de veículos do teste grátis atingido. Escolha um plano para continuar.');
 
   const vehicleId = id('veh');
   try {
@@ -410,12 +437,28 @@ async function generateAlerts(env) {
     )`).run();
 }
 
+async function kiwifyWebhook(request, env) {
+  const raw = await request.text();
+  const secret = env.KIWIFY_WEBHOOK_TOKEN || '';
+  assert(secret, 503, 'WEBHOOK_NOT_CONFIGURED', 'Webhook da Kiwify sem token configurado.');
+  const authorized = await isKiwifyAuthorized(request, raw, secret);
+  assert(authorized, 401, 'INVALID_WEBHOOK', 'Webhook da Kiwify não autorizado.');
+  let body;
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new HttpError(400, 'INVALID_JSON', 'Corpo JSON inválido.');
+  }
+  return json({ ok: true, ...(await applyKiwifyWebhook(env, body)) });
+}
+
 async function api(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method.toUpperCase();
 
   if (path === '/api/health') return json({ ok: true, service: 'frota-sky-api', time: new Date().toISOString() });
+  if (path === '/api/webhooks/kiwify' && method === 'POST') return kiwifyWebhook(request, env);
   if (path === '/api/auth/register' && method === 'POST') return register(request, env);
   if (path === '/api/auth/login' && method === 'POST') return login(request, env);
   if (path === '/api/auth/logout' && method === 'POST') return logout(request, env);
