@@ -32,7 +32,7 @@ VALUES
   'usr_demo_owner_001',
   'Carlos Eduardo',
   'admin@frotasky.demo',
-  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$5fux6hrcITVhQwXQgyOJnMTz9sTOjhdTSv9w8DoNRBU=',
+  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$iPIEywTdj6x7r0adHhpA2VgsEIak58rQf/RbEYoNbUQ=',
   'active',
   datetime('now','-14 months'),
   datetime('now')
@@ -41,7 +41,7 @@ VALUES
   'usr_demo_admin_001',
   'Mariana Costa',
   'operacoes@frotasky.demo',
-  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$5fux6hrcITVhQwXQgyOJnMTz9sTOjhdTSv9w8DoNRBU=',
+  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$iPIEywTdj6x7r0adHhpA2VgsEIak58rQf/RbEYoNbUQ=',
   'active',
   datetime('now','-12 months'),
   datetime('now')
@@ -50,7 +50,7 @@ VALUES
   'usr_demo_manager_001',
   'Rafael Martins',
   'gestor@frotasky.demo',
-  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$5fux6hrcITVhQwXQgyOJnMTz9sTOjhdTSv9w8DoNRBU=',
+  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$iPIEywTdj6x7r0adHhpA2VgsEIak58rQf/RbEYoNbUQ=',
   'active',
   datetime('now','-10 months'),
   datetime('now')
@@ -59,7 +59,7 @@ VALUES
   'usr_demo_driver_001',
   'João Batista',
   'motorista@frotasky.demo',
-  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$5fux6hrcITVhQwXQgyOJnMTz9sTOjhdTSv9w8DoNRBU=',
+  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$iPIEywTdj6x7r0adHhpA2VgsEIak58rQf/RbEYoNbUQ=',
   'active',
   datetime('now','-7 months'),
   datetime('now')
@@ -68,7 +68,7 @@ VALUES
   'usr_demo_viewer_001',
   'Fernanda Almeida',
   'viewer@frotasky.demo',
-  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$5fux6hrcITVhQwXQgyOJnMTz9sTOjhdTSv9w8DoNRBU=',
+  'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$iPIEywTdj6x7r0adHhpA2VgsEIak58rQf/RbEYoNbUQ=',
   'active',
   datetime('now','-5 months'),
   datetime('now')

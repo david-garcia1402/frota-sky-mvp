@@ -151,15 +151,43 @@ async function organizationById(env, organizationId) {
   }
 }
 
+const BROKEN_DEMO_PASSWORD_HASH = 'pbkdf2_sha256$100000$RnJvdGFTa3lTZWVkRGVtbzIwMjY=$5fux6hrcITVhQwXQgyOJnMTz9sTOjhdTSv9w8DoNRBU=';
+const DEMO_PASSWORD = 'FrotaSky@2026';
+
+function withUsername(row) {
+  if (row && row.username === undefined) row.username = null;
+  return row;
+}
+
+async function findUserForLogin(env, identifier) {
+  const modern = 'id, name, email, username, password_hash, status';
+  try {
+    const byEmail = await env.DB.prepare(`SELECT ${modern} FROM users WHERE email = ? LIMIT 1`).bind(identifier).first();
+    const user = byEmail || await env.DB.prepare(`SELECT ${modern} FROM users WHERE username = ? LIMIT 1`).bind(identifier).first();
+    return withUsername(user);
+  } catch (cause) {
+    if (!String(cause?.message || cause).includes('no such column')) throw cause;
+    const legacy = 'id, name, email, password_hash, status';
+    return withUsername(await env.DB.prepare(`SELECT ${legacy} FROM users WHERE email = ? LIMIT 1`).bind(identifier).first());
+  }
+}
+
+async function passwordMatches(env, user, password) {
+  if (await verifyPassword(password, user.password_hash)) return true;
+  if (user.password_hash !== BROKEN_DEMO_PASSWORD_HASH || password !== DEMO_PASSWORD) return false;
+  const passwordHash = await hashPassword(password);
+  await env.DB.prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ? AND password_hash = ?`)
+    .bind(passwordHash, user.id, BROKEN_DEMO_PASSWORD_HASH).run();
+  return true;
+}
+
 async function login(request, env) {
   const body = await readJson(request);
   const identifier = loginIdentifier(body);
   const password = String(body.password || '');
   assert(identifier && password, 401, 'INVALID_CREDENTIALS', 'E-mail, usuário ou senha inválidos.');
-  const columns = 'id, name, email, username, password_hash, status';
-  let user = await env.DB.prepare(`SELECT ${columns} FROM users WHERE email = ? LIMIT 1`).bind(identifier).first();
-  if (!user) user = await env.DB.prepare(`SELECT ${columns} FROM users WHERE username = ? LIMIT 1`).bind(identifier).first();
-  assert(user && user.status === 'active' && await verifyPassword(password, user.password_hash), 401, 'INVALID_CREDENTIALS', 'E-mail, usuário ou senha inválidos.');
+  const user = await findUserForLogin(env, identifier);
+  assert(user && user.status === 'active' && await passwordMatches(env, user, password), 401, 'INVALID_CREDENTIALS', 'E-mail, usuário ou senha inválidos.');
   const membership = await membershipForUser(env, user.id);
   assert(membership, 403, 'NO_ORGANIZATION', 'Usuário sem organização vinculada.');
 
@@ -566,6 +594,15 @@ async function assertOrgVehicles(env, organizationId, vehicleIds) {
 async function listOperators(request, env) {
   const auth = await requireAuth(request, env);
   requireRole(auth, MANAGER_ROLES);
+  try {
+    return await listOperatorsQuery(env, auth);
+  } catch (cause) {
+    if (!/no such (column|table)/i.test(String(cause?.message || cause))) throw cause;
+    return json({ items: [] });
+  }
+}
+
+async function listOperatorsQuery(env, auth) {
   const members = await env.DB.prepare(`
     SELECT u.id, u.name, u.email, u.username, u.status, om.role, om.created_at
     FROM organization_members om
