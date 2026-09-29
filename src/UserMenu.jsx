@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, LoaderCircle, LogOut } from 'lucide-react';
 import { planLabel } from '../shared/plans.js';
 
-const roles = { owner: 'Proprietário', admin: 'Administrador', manager: 'Gestor', driver: 'Motorista', viewer: 'Visualizador' };
+const roles = { owner: 'Proprietário', admin: 'Administrador', manager: 'Gestor', driver: 'Operador', viewer: 'Visualizador' };
 
 export default function UserMenu({ user, organization, onLogout, loggingOut }) {
   const [open, setOpen] = useState(false);
@@ -42,7 +42,7 @@ export default function UserMenu({ user, organization, onLogout, loggingOut }) {
       <h2>Minha conta</h2>
       <dl>
         <div><dt>Nome</dt><dd>{user.name || 'Não informado'}</dd></div>
-        <div><dt>E-mail</dt><dd>{user.email || 'Não informado'}</dd></div>
+        <div><dt>{user.email ? 'E-mail' : 'Usuário'}</dt><dd>{user.email || user.username || 'Não informado'}</dd></div>
         <div><dt>Empresa</dt><dd>{organization.name || 'Não informada'}</dd></div>
         <div><dt>Plano</dt><dd>{planLabel(organization.plan)}{organization.billingStatus==='past_due'?' · pagamento em atraso':''}</dd></div>
         <div><dt>Perfil de acesso</dt><dd>{role}</dd></div>

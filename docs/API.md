@@ -5,7 +5,7 @@ Todas as rotas usam o mesmo domínio do frontend e prefixo `/api`. Sessões são
 ## Autenticação
 
 - `POST /api/auth/register` — cria usuário owner + organização trial (2 veículos) + sessão.
-- `POST /api/auth/login` — autentica e cria sessão.
+- `POST /api/auth/login` — autentica e cria sessão. Aceita e-mail ou usuário (`email`, `username` ou `login`) mais senha.
 - `POST /api/auth/logout` — invalida a sessão atual.
 - `GET /api/auth/me` — retorna usuário e organização atual.
 
@@ -24,6 +24,16 @@ Todas as rotas usam o mesmo domínio do frontend e prefixo `/api`. Sessões são
 
 - `GET /api/drivers`
 - `POST /api/drivers`
+
+## Operadores
+
+O gestor (`owner`, `admin` ou `manager`) cadastra o operador só com nome, usuário e senha, e vincula o caminhão ou carro dele.
+
+- `GET /api/operators` — lista operadores e os veículos atribuídos.
+- `POST /api/operators` — cria o usuário com papel `driver`. Corpo: `name`, `username`, `password`, `vehicleId` (ou `vehicleIds`).
+- `PATCH /api/operators/:id` — altera nome, usuário, senha, veículo ou `status` (`active` / `disabled`).
+
+O login desse usuário aceita o `username`. A sessão devolve só os veículos atribuídos. Listas de frota, abastecimento, manutenção, dashboard e alertas ficam restritas a esses veículos. O operador pode lançar quilometragem (`POST /api/vehicles/:id/odometer`), abastecimento e manutenção corretiva do próprio veículo. O restante da frota e os módulos de motoristas, documentos, fornecedores, inspeções e arquivos respondem `403`.
 
 ## Combustível
 
@@ -79,7 +89,7 @@ A empresa é localizada por `TrackingParameters.src` (id da organização) e, se
 - `owner`: controle total do tenant.
 - `admin`: administração operacional.
 - `manager`: criação/edição operacional.
-- `driver`: reservado para PWA do motorista.
+- `driver`: operador. Entra com usuário e senha e acessa somente o veículo atribuído (km, abastecimento e manutenção).
 - `viewer`: leitura.
 
 O backend valida `organization_id` nas consultas e mutações sensíveis.
