@@ -38,10 +38,10 @@ export function getCookie(request, name) {
   return null;
 }
 
-export function sessionCookie(token, maxAge = 60 * 60 * 24 * 30) {
-  return `frota_session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+export function sessionCookie(token, { maxAge = 60 * 60 * 24 * 30, secure = true } = {}) {
+  return `frota_session=${encodeURIComponent(token)}; Path=/; HttpOnly;${secure ? ' Secure;' : ''} SameSite=Lax; Max-Age=${maxAge}`;
 }
 
-export function clearSessionCookie() {
-  return 'frota_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+export function clearSessionCookie(secure = true) {
+  return `frota_session=; Path=/; HttpOnly;${secure ? ' Secure;' : ''} SameSite=Lax; Max-Age=0`;
 }

@@ -18,7 +18,7 @@ Esta versão já deixou de usar `localStorage` como fonte principal e possui bac
 - criação de conta e empresa;
 - login/logout com sessão server-side;
 - isolamento multi-tenant por `organization_id`;
-- perfis de permissão;
+- perfis de permissão, incluindo operador restrito ao próprio veículo;
 - veículos e limite de plano;
 - motoristas/CNH;
 - abastecimentos;

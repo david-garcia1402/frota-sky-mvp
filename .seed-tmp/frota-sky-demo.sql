@@ -314,3 +314,8 @@ VALUES
   datetime('now','-3 days')
 );
 
+UPDATE users SET username = 'joao' WHERE id = 'usr_demo_driver_001';
+UPDATE drivers SET user_id = 'usr_demo_driver_001' WHERE id = 'drv_demo_001';
+INSERT INTO operator_vehicles (id, organization_id, user_id, vehicle_id)
+VALUES ('opv_demo_001', 'org_frotasky_demo_001', 'usr_demo_driver_001', 'veh_demo_001');
+

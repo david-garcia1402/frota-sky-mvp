@@ -7,7 +7,7 @@ export async function requireAuth(request, env) {
   const tokenHash = await sha256(token);
   const row = await env.DB.prepare(`
     SELECT s.id AS session_id, s.expires_at,
-           u.id AS user_id, u.name, u.email,
+           u.id AS user_id, u.name, u.email, u.username,
            om.organization_id, om.role,
            o.name AS organization_name
     FROM sessions s
